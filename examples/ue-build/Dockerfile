@@ -5,6 +5,7 @@ FROM ubuntu:latest AS gatherer
 ARG MAJOR_VERSION=17
 ARG MSVC_VERSION=17.14
 ARG SDK_VERSION=10.0.26100
+ARG PACKAGES=""
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked \
 	apt-get update && \
@@ -19,15 +20,13 @@ RUN git clone https://github.com/mstorsjo/msvc-wine.git /home/ubuntu/msvc-wine
 
 WORKDIR /home/ubuntu/msvc-wine
 
-# # get sdks
-# RUN ./vsdownload.py --dest ./downloaded --cache ./cache --accept-license --skip-patch --major $MAJOR_VERSION --msvc-version $MSVC_VERSION --sdk-version $SDK_VERSION
-# # run without specific msvc version to also grab llvm 
-# RUN ./vsdownload.py --dest ./downloaded-llvm --cache ./cache --accept-license --skip-patch --major $MAJOR_VERSION
-
-# # get netfxsdk
-# RUN ./vsdownload.py --dest ./downloaded --cache ./cache --accept-license --skip-patch --major $MAJOR_VERSION --msvc-version $MSVC_VERSION --sdk-version $SDK_VERSION package Microsoft.Net.Component.4.6.2.SDK
-
-RUN ./vsdownload.py --dest ./downloaded --cache ./cache --accept-license --skip-patch Microsoft.Net.Component.4.6.2.SDK Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 Microsoft.VisualStudio.Component.VC.Llvm.Clang Microsoft.VisualStudio.Component.Windows11SDK.22621
+RUN if [ "$PACKAGES" != "" ]; then \
+        ./vsdownload.py --dest ./downloaded --cache ./cache --accept-license --skip-patch $PACKAGES ; \
+    else \
+        ./vsdownload.py --dest ./downloaded --cache ./cache --accept-license --skip-patch --major $MAJOR_VERSION --msvc-version $MSVC_VERSION --sdk-version $SDK_VERSION && \
+        ./vsdownload.py --dest ./downloaded-llvm --cache ./cache --accept-license --skip-patch --major $MAJOR_VERSION && \
+        ./vsdownload.py --dest ./downloaded --cache ./cache --accept-license --skip-patch --major $MAJOR_VERSION --msvc-version $MSVC_VERSION --sdk-version $SDK_VERSION package Microsoft.Net.Component.4.6.2.SDK; \
+    fi
 
 # extract netfxsdk files
 RUN cd /home/ubuntu/msvc-wine/cache/Microsoft.Net.4.6.2.SDK-4.6.1590.5 && \
@@ -61,3 +60,4 @@ WORKDIR $WINEPREFIX/drive_c
 COPY --from=gatherer --chown=nonroot:nonroot ["/home/ubuntu/AutoSDK", "./AutoSDK"]
 
 ENV UE_SDKS_ROOT=C:/AutoSDK
+ENV WINEDEBUG=-all
