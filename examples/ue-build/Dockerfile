@@ -40,7 +40,11 @@ RUN mkdir -p /home/ubuntu/AutoSDK/HostWin64/Win64
 WORKDIR /home/ubuntu/AutoSDK/HostWin64/Win64
 RUN mv "/home/ubuntu/msvc-wine/downloaded/DIA SDK" "./" && \
     mv "/home/ubuntu/msvc-wine/downloaded/Windows Kits" "./Windows Kits" && \
-    mv "/home/ubuntu/msvc-wine/downloaded/VC/Tools/Llvm" "./LLVM" && \
+    if [ "$PACKAGES" != "" ]; then \
+        mv "/home/ubuntu/msvc-wine/downloaded/VC/Tools/Llvm" "./LLVM"; \
+    else \
+        mv "/home/ubuntu/msvc-wine/downloaded-llvm/VC/Tools/Llvm" "./LLVM"; \
+    fi && \
     mv "/home/ubuntu/NETFXSDK" "./Windows Kits/" && \
     if [ "$MAJOR_VERSION" = "16" ]; then \
         mv "/home/ubuntu/msvc-wine/downloaded/VC/Tools/MSVC" ./VS2019 ; \
