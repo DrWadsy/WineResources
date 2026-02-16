@@ -88,7 +88,7 @@ if args.windows_sdk_json != '':
 
 # build a WineResources base image
 Utility.run([
-	build_dir / 'build.sh', '--layout', '--no-32bit', '--no-sudo'
+	build_dir / 'build.sh', '--layout', '--no-sudo'
 	])
 
 Utility.run([
