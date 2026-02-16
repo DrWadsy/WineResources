@@ -28,6 +28,10 @@ RUN if [ "$PACKAGES" != "" ]; then \
         ./vsdownload.py --dest ./downloaded --cache ./cache --accept-license --skip-patch --major $MAJOR_VERSION --msvc-version $MSVC_VERSION --sdk-version $SDK_VERSION package Microsoft.Net.Component.4.6.2.SDK; \
     fi
 
+# prepare winsdksetup for next stage
+RUN file=`find ./cache/ -iname winsdksetup.exe -type f` && \
+    cp $file /home/ubuntu/winsdksetup.exe
+
 # extract netfxsdk files
 RUN cd /home/ubuntu/msvc-wine/cache/Microsoft.Net.4.6.2.SDK-4.6.1590.5 && \
     msiextract ./sdk_tools462.msi && \
@@ -56,12 +60,42 @@ RUN mv "/home/ubuntu/msvc-wine/downloaded/DIA SDK" "./" && \
         echo "No valid sdk version specified"; \
     fi
 
-# Stage 2
+FROM ${BASE_IMAGE} AS installer
 
+WORKDIR /home/ubuntu/
+
+# create AutoSDK folder structure
+RUN mkdir -p /home/ubuntu/AutoSDK/HostWin64/Win64
+
+# Get Debugging Tools for Windows
+COPY --from=gatherer --chown=nonroot:nonroot ["/home/ubuntu/winsdksetup.exe", "./winsdksetup.exe"]
+RUN wine winsdksetup.exe /layout ./temp /quiet /ceip off /features OptionID.WindowsDesktopDebuggers && \
+    mv "./temp/Installers" "/home/ubuntu/DebugTools"
+
+FROM ubuntu:latest AS debug_tools_grabber
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        msitools
+
+WORKDIR /home/ubuntu/
+
+# create AutoSDK folder structure
+RUN mkdir -p /home/ubuntu/AutoSDK/HostWin64/Win64
+
+# Extract Debugging Tools for Windows
+COPY --from=installer --chown=nonroot:nonroot ["/home/ubuntu/DebugTools", "./DebugTools"]
+WORKDIR /home/ubuntu/DebugTools
+RUN msiextract ./X64\ Debuggers\ And\ Tools-x64_en-us.msi && \
+    mv "./Windows Kits" "/home/ubuntu/AutoSDK/HostWin64/Win64/Windows Kits"
+
+# Stage 3
 FROM ${BASE_IMAGE}
 
 WORKDIR $WINEPREFIX/drive_c
 COPY --from=gatherer --chown=nonroot:nonroot ["/home/ubuntu/AutoSDK", "./AutoSDK"]
+COPY --from=debug_tools_grabber --chown=nonroot:nonroot ["/home/ubuntu/AutoSDK", "./AutoSDK"]
 
 ENV UE_SDKS_ROOT=C:/AutoSDK
 ENV WINEDEBUG=-all
