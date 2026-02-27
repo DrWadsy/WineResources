@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, shutil, string, subprocess, sys
+import argparse, json, subprocess, sys
 from pathlib import Path
 
 class Utility:
@@ -9,7 +9,7 @@ class Utility:
 		"""
 		Prints a log message to stderr
 		"""
-		print('[runUBTinWineContainer.py] {}'.format(message), file=sys.stderr, flush=True)
+		print('[build-autosdk-image.py] {}'.format(message), file=sys.stderr, flush=True)
 	
 	@staticmethod
 	def error(message):
