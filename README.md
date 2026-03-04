@@ -2,7 +2,7 @@
 
 This repository contains resources related to building and running Unreal Engine under the [Wine](https://www.winehq.org/) compatibility layer. Note that these resources primarily focus on **development and cloud deployment workflows** for Unreal Engine, rather than building and publishing games for the Valve Steam Deck. For resources related to the latter use case, see the [Steam Deck section of the Unreal Engine documentation](https://docs.unrealengine.com/en-US/steam-deck-in-unreal-engine/).
 
-Pull requests that fix bugs are welcomed. **However, support is not provided via this GitHub repository.** Premium support is available for Unreal Engine licensees via the Unreal Developer Network (UDN), part of [Epic Direct Support](https://www.unrealengine.com/en-US/support).
+Pull requests that fix bugs are welcomed. **However, support is not provided via this GitHub repository.** Premium support is available for Unreal Engine licensees via [Epic Pro Support](https://www.unrealengine.com/en-US/support).
 
 > [!IMPORTANT]
 > Wine support for Unreal Engine is still under active development and is considered experimental. See the [*Workload Status*](./docs/status.md) page for details of which workloads are currently known to function under Wine.
@@ -39,6 +39,6 @@ The [**docs**](./docs) subdirectory contains documentation related to the resour
 
 ## Legal
 
-&copy; 2024, Epic Games, Inc. The code in this repository is licensed under the MIT License, see the file [LICENSE](./LICENSE) for details.
+&copy; 2024 - 2026, Epic Games, Inc. The code in this repository is licensed under the MIT License, see the file [LICENSE](./LICENSE) for details.
 
 Unreal and its logo are Epic's trademarks or registered trademarks in the US and elsewhere.
