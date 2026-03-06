@@ -1,6 +1,8 @@
 # Extend the base image containing the patched version of Wine
-ARG WINE_VERSION
-FROM epicgames/wine-patched:${WINE_VERSION}
+ARG UE_VERSION=invalid
+ARG WINE_VERSION=invalid
+
+FROM epicgames/autosdk-ue-${UE_VERSION}-wine:${WINE_VERSION}
 
 # Disable Wine debug logging
 ENV WINEDEBUG=-all

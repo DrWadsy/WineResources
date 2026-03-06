@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-import argparse, json, subprocess, sys
+import argparse, json, platform, subprocess, sys
 from pathlib import Path
 
 class Utility:
 	
 	@staticmethod
-	def log(message):
+	def log(message, leading_newline=False):
 		"""
 		Prints a log message to stderr
 		"""
-		print('[build-autosdk-image.py] {}'.format(message), file=sys.stderr, flush=True)
+		print('{}[build-autosdk-image.py] {}'.format(
+			'\n' if leading_newline == True else '',
+			message),
+			file=sys.stderr, flush=True)
 	
 	@staticmethod
 	def error(message):
@@ -29,7 +32,7 @@ class Utility:
 		return subprocess.run(stringified, **{'check': True, **kwargs})
 
 parser = argparse.ArgumentParser()
-parser.add_argument('windows_sdk_json', default='', help='Set the path to the Windows_SDK.json file to use', nargs='?')
+parser.add_argument('engine_source', default='', help='Set the path to the UE source to use', nargs='?')
 
 versions = parser.add_argument_group('Version arguments', 'Provide either the path to the UE source, or all three of these values')
 versions.add_argument('--major-version', default='', help='Set the major version of the MSVC tools to use')
@@ -39,26 +42,31 @@ versions.add_argument('--sdk-version', default='', help='Set the version of the 
 args = parser.parse_args()
 
 # Ensure that either the path to Windows_SDK.json is provided, or the three version args, but not both
-if (args.windows_sdk_json != '' and (args.major_version != '' or args.msvc_version != '' or args.sdk_version != '')) or \
-	(args.windows_sdk_json == '' and (args.major_version == '' or args.msvc_version == '' or args.sdk_version == '')):
-	Utility.error('Invalid arguments. You must provide either the path to "Windows_SDK.json", or all three version arguments')
+if (args.engine_source != '' and (args.major_version != '' or args.msvc_version != '' or args.sdk_version != '')) or \
+	(args.engine_source == '' and (args.major_version == '' or args.msvc_version == '' or args.sdk_version == '')):
+	Utility.error('Invalid arguments. You must provide either the path to the UE source, or all three version arguments')
 
 # Resolve the absolute paths to our input directories
-ue_build_dir = Path(__file__).parent
-examples_dir = ue_build_dir.parent
-base_dir = examples_dir.parent
-build_dir = base_dir / 'build'
+autosdk_dir = Path(__file__).parent
+repo_root = autosdk_dir.parent.parent.parent
+build_dir = repo_root / 'build'
 
 filtered_packages = []
-if args.windows_sdk_json != '':
+compatability_tag = "custom"
+if args.engine_source != '':
+	# parse build.version to determine UE version
+	build_version_file = Path(args.engine_source) / 'Engine' / 'Build' / 'Build.version'
+	with open(build_version_file, 'r') as file:
+		version_data = json.load(file)
+	compatability_tag = "ue-{}.{}.{}".format(version_data.get('MajorVersion'), version_data.get('MinorVersion'), version_data.get('PatchVersion'))
+
 	# parse windows_SDK.json to determine packages to pull
-	# windows_sdk_json = Path(args.windows_sdk_json) / 'Engine' / 'Config' / 'Windows' / 'Windows_SDK.json'
-	with open(args.windows_sdk_json, 'r') as file:
+	windows_sdk_json = Path(args.engine_source) / 'Engine' / 'Config' / 'Windows' / 'Windows_SDK.json'
+	with open(windows_sdk_json, 'r') as file:
 		data = json.load(file)
 
 	# Extract windows sdk version and remove the patch version
 	sdk_version = (data.get('MainVersion')).rsplit('.', 1)[0]
-	# TODO - is this right, or is 2026 support only experimental...
 	# if VS2026 is supported then prefer it
 	msvc_version = data.get('MinimumVisualStudio2026Version')
 	if msvc_version is None:
@@ -86,28 +94,34 @@ if args.windows_sdk_json != '':
 	if len(filtered_packages) == 0:
 		Utility.error('No packages could be read from {}. Check you have provided the path to the UE source code.'.format(args.windows_sdk_json))
 
+# Read the Wine version string so we know the base image tag
+wine_version_file = repo_root / 'build' / 'version.json'
+wine_version_contents = json.loads(wine_version_file.read_text('utf-8'))
+wine_version = wine_version_contents.get('wine-version')
+
 # build a WineResources base image
+build_script = 'build.py' if platform.system() == 'Windows' else 'build.sh'
 Utility.run([
-	build_dir / 'build.sh', '--layout', '--no-sudo'
+	build_dir / build_script, '--layout', '--no-sudo'
 	])
 
 Utility.run([
 	'docker', 'buildx', 'build',
 	'--progress=plain',
-	'-t', 'tensorworks/wine-patched:temp',
+	'-t', 'epicgames/wine-patched:{}'.format(wine_version),
 	build_dir / 'context'
 ])
 
 # build an AutoSDK enabled image
-if args.windows_sdk_json != '':
+if args.engine_source != '':
 	Utility.run([
 		'docker', 'buildx', 'build',
 		'--progress=plain',
 		'--build-arg', 'MAJOR_VERSION={}'.format(major_version),
 		'--build-arg', 'PACKAGES={}'.format(' '.join(filtered_packages)),
-		'--build-arg', 'BASE_IMAGE=tensorworks/wine-patched:temp',
-		'-t', 'tensorworks/autosdk-wine:temp',
-		ue_build_dir
+		'--build-arg', 'BASE_IMAGE=epicgames/wine-patched:{}'.format(wine_version),
+		'-t', 'epicgames/autosdk-{}-wine:{}'.format(compatability_tag, wine_version),
+		autosdk_dir
 	])
 else:
 	Utility.run([
@@ -116,9 +130,9 @@ else:
 		'--build-arg', 'MAJOR_VERSION={}'.format(args.major_version),
 		'--build-arg', 'MSVC_VERSION={}'.format(args.msvc_version),
 		'--build-arg', 'SDK_VERSION={}'.format(args.sdk_version),
-		'--build-arg', 'BASE_IMAGE=tensorworks/wine-patched:temp',
-		'-t', 'tensorworks/autosdk-wine:temp',
-		ue_build_dir
+		'--build-arg', 'BASE_IMAGE=epicgames/wine-patched:{}'.format(wine_version),
+		'-t', 'epicgames/autosdk-{}-wine-{}:{}'.format(compatability_tag, wine_version),
+		autosdk_dir
 	])
 
-Utility.log('AutoSDK docker image built: "tensorworks/autosdk-wine:temp"')
+Utility.log('AutoSDK docker image built: "epicgames/autosdk-{}-wine:{}"'.format(compatability_tag, wine_version), leading_newline=True)
