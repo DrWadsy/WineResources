@@ -72,7 +72,7 @@ wine_version = wine_version_contents.get('wine-version')
 Utility.run([
     'docker', 'run', '--rm', '-t', '--init',
     '-v', '{}:/home/nonroot/.local/share/wineprefixes/prefix/drive_c/UE'.format(args.engine_source),
-    'epicgames/autosdk-ue-{}-wine:{}'.format(ue_version, wine_version),
+    'epicgames/autosdk-wine:{}'.format(ue_version),
     'wine', './UE/Engine/Build/BatchFiles/RunUAT.bat', 'BuildGraph',
     '-target=Make Installed Build Win64', '-script=Engine/Build/InstalledEngineBuild.xml',
     '-set:HostPlatformOnly=true'
@@ -80,6 +80,7 @@ Utility.run([
 
 # Optionally containerise the Installed Build
 if args.containerise:
+	Utility.log("Copying engine artifacts for containerisation")
 	wrap_build_dir = quickstart_dir / 'wrap-installed-build'
 	destination_dir = wrap_build_dir / 'context' / 'UnrealEngine'
 

@@ -52,13 +52,13 @@ repo_root = autosdk_dir.parent.parent.parent
 build_dir = repo_root / 'build'
 
 filtered_packages = []
-compatability_tag = "custom"
+ue_version = "custom"
 if args.engine_source != '':
 	# parse build.version to determine UE version
 	build_version_file = Path(args.engine_source) / 'Engine' / 'Build' / 'Build.version'
 	with open(build_version_file, 'r') as file:
 		version_data = json.load(file)
-	compatability_tag = "ue-{}.{}.{}".format(version_data.get('MajorVersion'), version_data.get('MinorVersion'), version_data.get('PatchVersion'))
+	ue_version = "{}.{}.{}".format(version_data.get('MajorVersion'), version_data.get('MinorVersion'), version_data.get('PatchVersion'))
 
 	# parse windows_SDK.json to determine packages to pull
 	windows_sdk_json = Path(args.engine_source) / 'Engine' / 'Config' / 'Windows' / 'Windows_SDK.json'
@@ -120,7 +120,7 @@ if args.engine_source != '':
 		'--build-arg', 'MAJOR_VERSION={}'.format(major_version),
 		'--build-arg', 'PACKAGES={}'.format(' '.join(filtered_packages)),
 		'--build-arg', 'BASE_IMAGE=epicgames/wine-patched:{}'.format(wine_version),
-		'-t', 'epicgames/autosdk-{}-wine:{}'.format(compatability_tag, wine_version),
+		'-t', 'epicgames/autosdk-wine:{}'.format(ue_version),
 		autosdk_dir
 	])
 else:
@@ -131,8 +131,8 @@ else:
 		'--build-arg', 'MSVC_VERSION={}'.format(args.msvc_version),
 		'--build-arg', 'SDK_VERSION={}'.format(args.sdk_version),
 		'--build-arg', 'BASE_IMAGE=epicgames/wine-patched:{}'.format(wine_version),
-		'-t', 'epicgames/autosdk-{}-wine-{}:{}'.format(compatability_tag, wine_version),
+		'-t', 'epicgames/autosdk-wine:{}'.format(ue_version),
 		autosdk_dir
 	])
 
-Utility.log('AutoSDK docker image built: "epicgames/autosdk-{}-wine:{}"'.format(compatability_tag, wine_version), leading_newline=True)
+Utility.log('AutoSDK docker image built: "epicgames/autosdk-wine:{}"'.format(ue_version), leading_newline=True)

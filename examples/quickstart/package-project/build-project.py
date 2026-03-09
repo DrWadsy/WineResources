@@ -63,7 +63,7 @@ if args.engine != '':
 		'docker', 'run', '--rm', '-it', '--init',
 		'-v', '{}:/home/nonroot/.local/share/wineprefixes/prefix/drive_c/UE'.format(args.engine),
 		'-v', '{}:/home/nonroot/.local/share/wineprefixes/prefix/drive_c/project'.format(project_dir),
-		'epicgames/autosdk-ue-{}-wine:{}'.format(ue_version, wine_version),
+		'epicgames/autosdk-wine:{}'.format(ue_version),
 		'wine', './UE/Engine/Build/BatchFiles/RunUAT.bat', 'BuildCookRun',
 		'-project=C:/project/{}'.format(project_file),
 		'-nop4', '-allmaps', '-build', '-cook', '-stage', '-pak'
@@ -74,7 +74,7 @@ else:
 	# bindmount in project 
 	# build the project
 	Utility.run([
-		'docker', 'run', '--rm', '-it',
+		'docker', 'run', '--rm', '-it', '--init',
 		'-v', '{}:/home/nonroot/.local/share/wineprefixes/prefix/drive_c/project'.format(project_dir),
 		args.image,
 		'wine', './UnrealEngine/Engine/Build/BatchFiles/RunUAT.bat', 'BuildCookRun',
