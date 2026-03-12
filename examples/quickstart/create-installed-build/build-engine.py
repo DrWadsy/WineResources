@@ -48,14 +48,15 @@ create_installed_build_dir = Path(__file__).parent
 quickstart_dir = create_installed_build_dir.parent
 
 Utility.run([
-	quickstart_dir / 'autosdk' / 'build-autosdk-image.py',
-    args.engine_source
+	sys.executable,
+	quickstart_dir / 'autosdk' / 'assemble.py',
+	args.engine_source
 ])
 
 # Remove the ADOSuppport plugin if it is present, since it is unused and breaks builds
 ADOPlugin_path = Path(args.engine_source) / 'Engine' / 'Plugins' / 'Runtime' / 'Database' / 'ADOSupport'
 if ADOPlugin_path.exists():
-    shutil.rmtree(ADOPlugin_path)
+	shutil.rmtree(ADOPlugin_path)
 
 # parse build.version to determine UE version
 build_version_file = Path(args.engine_source) / 'Engine' / 'Build' / 'Build.version'
@@ -70,12 +71,12 @@ wine_version = wine_version_contents.get('wine-version')
 
 # bindmount UE source into that image and run UBT with the provided args
 Utility.run([
-    'docker', 'run', '--rm', '-t', '--init',
-    '-v', '{}:/home/nonroot/.local/share/wineprefixes/prefix/drive_c/UE'.format(args.engine_source),
-    'epicgames/autosdk-wine:{}'.format(ue_version),
-    'wine', './UE/Engine/Build/BatchFiles/RunUAT.bat', 'BuildGraph',
-    '-target=Make Installed Build Win64', '-script=Engine/Build/InstalledEngineBuild.xml',
-    '-set:HostPlatformOnly=true'
+	'docker', 'run', '--rm', '-t', '--init',
+	'-v', '{}:/home/nonroot/.local/share/wineprefixes/prefix/drive_c/UE'.format(args.engine_source),
+	'epicgames/autosdk-wine:{}'.format(ue_version),
+	'wine', './UE/Engine/Build/BatchFiles/RunUAT.bat', 'BuildGraph',
+	'-target=Make Installed Build Win64', '-script=Engine/Build/InstalledEngineBuild.xml',
+	'-set:HostPlatformOnly=true'
 ])
 
 # Optionally containerise the Installed Build
@@ -108,6 +109,5 @@ if args.containerise:
 			Utility.error("Could not copy Installed Build artifacts to context folder for containerising: {}".format(e))
 	
 	Utility.run([
-	wrap_build_dir / 'build.sh'
+		sys.executable, wrap_build_dir / 'wrap.py',
 	])
-
