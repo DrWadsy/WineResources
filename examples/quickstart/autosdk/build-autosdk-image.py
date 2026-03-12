@@ -2,6 +2,7 @@
 import argparse, json, platform, subprocess, sys
 from pathlib import Path
 
+
 class Utility:
 	
 	@staticmethod
@@ -9,17 +10,24 @@ class Utility:
 		"""
 		Prints a log message to stderr
 		"""
-		print('{}[build-autosdk-image.py] {}'.format(
-			'\n' if leading_newline == True else '',
-			message),
-			file=sys.stderr, flush=True)
+		print(
+			'[build-autosdk-image.py]{}{}'.format(
+				'\n' if leading_newline == True else ' ',
+				message
+			),
+			file=sys.stderr,
+			flush=True
+		)
 	
 	@staticmethod
-	def error(message):
+	def error(message, leading_newline=False):
 		"""
 		Logs an error message and then exits immediately
 		"""
-		Utility.log('Error: {}'.format(message))
+		Utility.log('{}Error: {}'.format(
+			'\n' if leading_newline == True else '',
+			message
+		))
 		sys.exit(1)
 	
 	@staticmethod
@@ -31,108 +39,120 @@ class Utility:
 		Utility.log(stringified)
 		return subprocess.run(stringified, **{'check': True, **kwargs})
 
+
+def report_missing_engine(source_path):
+	"""
+	Prints an error message reporting the absence of the required engine source files and then exits
+	"""
+	Utility.error('\n'.join([
+		'the specified path is not the root of a valid Unreal Engine source tree:',
+		str(source_path),
+		'',
+		'Note that only Unreal Engine 5.6 or newer is supported.'
+	]), leading_newline=True)
+
+def parse_windows_sdk_json(windows_sdk_json):
+	"""
+	Parses the SDK details in `Windows_SDK.json` from an Unreal Engine source tree
+	"""
+	data = json.loads(Path(windows_sdk_json).read_text('utf-8'))
+	
+	# Determine the newest version of Visual Studio that the engine supports
+	vs_version = None
+	for version in reversed(sorted([2022, 2026])):
+		if 'MinimumVisualStudio{}Version'.format(version) in data:
+			vs_version = version
+			break
+	
+	# Verify that the JSON is not malformed
+	if vs_version is None:
+		raise
+	
+	# Retrieve the general list of suggested components/workloads
+	suggested = data['VisualStudioSuggestedComponents']
+	
+	# Retrieve the version-specific list of suggested components/workloads
+	suggested += data['VisualStudio{}SuggestedComponents'.format(vs_version)]
+	
+	# Filter out any components/workloads that we know are not required (e.g. IDE workloads)
+	ignored = ['.ATL', 'Component.Unreal', 'Microsoft.VisualStudio.Workload']
+	filter = lambda component: len([phrase for phrase in ignored if phrase in component]) == 0
+	suggested = [component for component in suggested if filter(component)]
+	
+	# Although the suggested components may list a .NET Framework targeting pack, we actually need the SDK
+	is_targeting_pack = lambda c: c.startswith('Microsoft.Net.Component') and c.endswith('TargetingPack')
+	suggested = [
+		component.replace('TargetingPack', 'SDK') if is_targeting_pack(component) else component
+		for component in suggested
+	]
+	
+	# Verify that we found at least one unfiltered component/workload
+	if len(suggested) == 0:
+		raise
+	
+	return {
+		'components': suggested,
+		'vs_identifier': 'VS{}'.format(vs_version)
+	}
+
+
+# Parse our command-line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('engine_source', default='', help='Set the path to the UE source to use', nargs='?')
-
-versions = parser.add_argument_group('Version arguments', 'Provide either the path to the UE source, or all three of these values')
-versions.add_argument('--major-version', default='', help='Set the major version of the MSVC tools to use')
-versions.add_argument('--msvc-version', default='', help='Set the version of the MSVC SDK to use')
-versions.add_argument('--sdk-version', default='', help='Set the version of the Windows SDK to use')
-
+parser.add_argument('engine_source', help='Path to the root of the Unreal Engine source tree')
 args = parser.parse_args()
-
-# Ensure that either the path to Windows_SDK.json is provided, or the three version args, but not both
-if (args.engine_source != '' and (args.major_version != '' or args.msvc_version != '' or args.sdk_version != '')) or \
-	(args.engine_source == '' and (args.major_version == '' or args.msvc_version == '' or args.sdk_version == '')):
-	Utility.error('Invalid arguments. You must provide either the path to the UE source, or all three version arguments')
 
 # Resolve the absolute paths to our input directories
 autosdk_dir = Path(__file__).parent
 repo_root = autosdk_dir.parent.parent.parent
-build_dir = repo_root / 'build'
+engine_dir = Path(args.engine_source) / 'Engine'
 
-filtered_packages = []
-ue_version = "custom"
-if args.engine_source != '':
-	# parse build.version to determine UE version
-	build_version_file = Path(args.engine_source) / 'Engine' / 'Build' / 'Build.version'
-	with open(build_version_file, 'r') as file:
-		version_data = json.load(file)
-	ue_version = "{}.{}.{}".format(version_data.get('MajorVersion'), version_data.get('MinorVersion'), version_data.get('PatchVersion'))
+# Verify that the specified engine source path is valid
+build_version = engine_dir / 'Build' / 'Build.version'
+windows_sdk_json = engine_dir / 'Config' / 'Windows' / 'Windows_SDK.json'
+if build_version.exists() == False or windows_sdk_json.exists() == False:
+	report_missing_engine(args.engine_source)
 
-	# parse windows_SDK.json to determine packages to pull
-	windows_sdk_json = Path(args.engine_source) / 'Engine' / 'Config' / 'Windows' / 'Windows_SDK.json'
-	with open(windows_sdk_json, 'r') as file:
-		data = json.load(file)
+# Attempt to detect the engine version
+engine_version = None
+try:
+	version_json = json.loads(build_version.read_text('utf-8'))
+	engine_version = '{}.{}.{}'.format(
+		version_json['MajorVersion'],
+		version_json['MinorVersion'],
+		version_json['PatchVersion']
+	)
+except:
+	report_missing_engine(args.engine_source)
 
-	# Extract windows sdk version and remove the patch version
-	sdk_version = (data.get('MainVersion')).rsplit('.', 1)[0]
-	# if VS2026 is supported then prefer it
-	msvc_version = data.get('MinimumVisualStudio2026Version')
-	if msvc_version is None:
-		msvc_version = data.get('MinimumVisualStudio2022Version')
-	# get the major version of msvc
-	major_version = msvc_version.rsplit('.', 1)[0]
+# Attempt to parse the SDK details in `Windows_SDK.json`
+sdk_details = None
+try:
+	sdk_details = parse_windows_sdk_json(windows_sdk_json)
+except:
+	report_missing_engine(args.engine_source)
 
-	msvc_version_suggestions = data.get('VisualStudio2026SuggestedComponents')
-	if msvc_version_suggestions is None:
-		msvc_version_suggestions = data.get('VisualStudio2022SuggestedComponents')
-
-	# Get suggested packages from Windows_SDK.json
-	extracted_packages = data.get('VisualStudioSuggestedComponents') + msvc_version_suggestions
-	invalid_phrases = ['.ATL', 'VisualStudio.Workload', 'Component.Unreal']
-
-	for package in extracted_packages:
-		valid = True
-		for phrase in invalid_phrases:
-			if phrase in package:
-				valid = False
-		if valid:
-			if package.startswith('Microsoft.Net.Component') and package.endswith('TargetingPack'):
-				package = package.replace('TargetingPack', 'SDK')
-			filtered_packages.append(package) 
-	if len(filtered_packages) == 0:
-		Utility.error('No packages could be read from {}. Check you have provided the path to the UE source code.'.format(args.windows_sdk_json))
+# Build our Wine base image with the default options
+# (This ensures mitigations are included, which are needed for .NET and C++ compilation)
+build_script = 'build.bat' if platform.system() == 'Windows' else 'build.sh'
+Utility.run([repo_root / 'build' / build_script])
 
 # Read the Wine version string so we know the base image tag
 wine_version_file = repo_root / 'build' / 'version.json'
 wine_version_contents = json.loads(wine_version_file.read_text('utf-8'))
 wine_version = wine_version_contents.get('wine-version')
 
-# build a WineResources base image
-build_script = 'build.py' if platform.system() == 'Windows' else 'build.sh'
-Utility.run([
-	build_dir / build_script, '--layout', '--no-sudo'
-	])
-
+# Build our AutoSDK image
+image_tag = 'epicgames/autosdk-wine:{}'.format(engine_version)
 Utility.run([
 	'docker', 'buildx', 'build',
 	'--progress=plain',
-	'-t', 'epicgames/wine-patched:{}'.format(wine_version),
-	build_dir / 'context'
+	'--build-arg', 'COMPONENTS_AND_WORKLOADS={}'.format(' '.join(sdk_details['components'])),
+	'--build-arg', 'VISUAL_STUDIO_IDENTIFIER={}'.format(sdk_details['vs_identifier']),
+	'--build-arg', 'WINE_VERSION={}'.format(wine_version),
+	'-t', image_tag,
+	autosdk_dir
 ])
 
-# build an AutoSDK enabled image
-if args.engine_source != '':
-	Utility.run([
-		'docker', 'buildx', 'build',
-		'--progress=plain',
-		'--build-arg', 'MAJOR_VERSION={}'.format(major_version),
-		'--build-arg', 'PACKAGES={}'.format(' '.join(filtered_packages)),
-		'--build-arg', 'BASE_IMAGE=epicgames/wine-patched:{}'.format(wine_version),
-		'-t', 'epicgames/autosdk-wine:{}'.format(ue_version),
-		autosdk_dir
-	])
-else:
-	Utility.run([
-		'docker', 'buildx', 'build',
-		'--progress=plain',
-		'--build-arg', 'MAJOR_VERSION={}'.format(args.major_version),
-		'--build-arg', 'MSVC_VERSION={}'.format(args.msvc_version),
-		'--build-arg', 'SDK_VERSION={}'.format(args.sdk_version),
-		'--build-arg', 'BASE_IMAGE=epicgames/wine-patched:{}'.format(wine_version),
-		'-t', 'epicgames/autosdk-wine:{}'.format(ue_version),
-		autosdk_dir
-	])
-
-Utility.log('AutoSDK docker image built: "epicgames/autosdk-wine:{}"'.format(ue_version), leading_newline=True)
+# Report the build success
+print('', file=sys.stderr)
+Utility.log('Successfully built container image "{}"'.format(image_tag), leading_newline=True)
