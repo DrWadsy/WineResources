@@ -11,7 +11,7 @@ class Utility:
 		Prints a log message to stderr
 		"""
 		print(
-			'[build-autosdk-image.py]{}{}'.format(
+			'[assemble.py]{}{}'.format(
 				'\n' if leading_newline == True else ' ',
 				message
 			),
