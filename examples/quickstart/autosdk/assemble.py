@@ -102,8 +102,9 @@ parser.add_argument('engine_source', help='Path to the root of the Unreal Engine
 args = parser.parse_args()
 
 # Resolve the absolute paths to our input directories
-autosdk_dir = Path(__file__).parent
-repo_root = autosdk_dir.parent.parent.parent
+script_dir = Path(__file__).parent
+repo_root = script_dir.parent.parent.parent
+context_dir = script_dir / 'context'
 engine_dir = Path(args.engine_source) / 'Engine'
 
 # Verify that the specified engine source path is valid
@@ -150,7 +151,7 @@ Utility.run([
 	'--build-arg', 'VISUAL_STUDIO_IDENTIFIER={}'.format(sdk_details['vs_identifier']),
 	'--build-arg', 'WINE_VERSION={}'.format(wine_version),
 	'-t', image_tag,
-	autosdk_dir
+	context_dir
 ])
 
 # Report the build success
