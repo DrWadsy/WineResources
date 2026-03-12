@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, platform, subprocess, sys
+import json, subprocess, sys
 from pathlib import Path
 
 
@@ -50,19 +50,21 @@ def report_missing_engine(editor_exe):
 		'Please copy the files for a Win64 Installed Build to:',
 		str(unreal_dir),
 		'',
-		'The recommended way to obtain an Installed Build is to install Unreal Engine via the Epic Games Launcher:',
-		'https://dev.epicgames.com/documentation/en-us/unreal-engine/installing-unreal-engine',
+		'You can create an Installed Build by building Unreal Engine from source using the script here:',
+		str(compile_dir),
 		'',
-		'Alternatively, you can create an Installed Build by building Unreal Engine from source:',
-		'https://dev.epicgames.com/documentation/en-us/unreal-engine/create-an-installed-build-of-unreal-engine',
+		'Alternatively, you can copy the files from an Installed Build obtained via the Epic Games Launcher:',
+		'https://dev.epicgames.com/documentation/en-us/unreal-engine/installing-unreal-engine',
 		'',
 		'When the files have been copied correctly, the Unreal Editor executable should exist at this path:',
 		str(editor_exe),
 	]), leading_newline=True)
 
+
 # Resolve the absolute paths to our input directories
 script_dir = Path(__file__).parent
 autosdk_dir = script_dir.parent / 'autosdk'
+compile_dir = script_dir.parent / 'create-installed-build'
 repo_root = script_dir.parent.parent.parent
 context_dir = script_dir / 'context'
 unreal_dir = context_dir / 'UnrealEngine'
@@ -87,12 +89,11 @@ except:
 	report_missing_engine(editor_exe)
 
 
-# Ensure our AutoSDK base image has been built
-build_result = Utility.run([ autosdk_dir / 'build-autosdk-image.py', unreal_dir ])
-
-# If the image build failed then propagate the exit code
-if build_result != 0:
-	sys.exit(build_result)
+# Build an AutoSDK base image with the appropriate SDK version for the engine
+Utility.run(
+	[sys.executable, autosdk_dir / 'build-autosdk-image.py', unreal_dir],
+	check=True
+)
 
 # Read the Wine version string so we know the base image tag
 wine_version_file = repo_root / 'build' / 'version.json'
