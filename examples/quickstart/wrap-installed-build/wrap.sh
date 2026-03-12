@@ -3,4 +3,4 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 set -ex
 
 # Run the build script, propagating any command-line arguments
-python3 "$SCRIPT_DIR/build.py" "$@"
+python3 "$SCRIPT_DIR/wrap.py" "$@"

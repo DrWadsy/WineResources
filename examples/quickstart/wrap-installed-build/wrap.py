@@ -11,7 +11,7 @@ class Utility:
 		Prints a log message to stderr
 		"""
 		print(
-			'[build.py]{}{}\n'.format(
+			'[wrap.py]{}{}\n'.format(
 				'\n' if leading_newline == True else ' ',
 				message
 			),
