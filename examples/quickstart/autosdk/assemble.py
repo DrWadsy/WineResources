@@ -147,6 +147,7 @@ image_tag = 'epicgames/autosdk-wine:{}'.format(engine_version)
 Utility.run([
 	'docker', 'buildx', 'build',
 	'--progress=plain',
+	'--platform', 'linux/amd64',
 	'--build-arg', 'COMPONENTS_AND_WORKLOADS={}'.format(' '.join(sdk_details['components'])),
 	'--build-arg', 'VISUAL_STUDIO_IDENTIFIER={}'.format(sdk_details['vs_identifier']),
 	'--build-arg', 'WINE_VERSION={}'.format(wine_version),
