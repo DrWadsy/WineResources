@@ -13,6 +13,9 @@ ARG VISUAL_STUDIO_IDENTIFIER=''
 # The major version number for the version of Visual Studio (VS2019 == 16, VS2022 == 17, VS2026 == 18)
 ARG VISUAL_STUDIO_VERSION=''
 
+# Disable Wine debug logging while we assemble the AutoSDK directory structure
+ENV WINEDEBUG=-all
+
 # Install our required system packages
 USER root
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -40,12 +43,18 @@ RUN python3 ./vsdownload.py \
 ENV AUTOSDK_DIR=/tmp/AutoSDK/HostWin64/Win64
 RUN mkdir -p "$AUTOSDK_DIR"
 RUN mkdir -p "$AUTOSDK_DIR/DIA SDK"
+RUN mkdir -p "$AUTOSDK_DIR/LLVM"
 
-# Move the files for the DIA SDK, LLVM, MSVC and the Windows SDK into the AutoSDK structure
-RUN mv '/tmp/msvc-wine/downloaded/DIA SDK'        "$AUTOSDK_DIR/DIA SDK/$VISUAL_STUDIO_IDENTIFIER" && \
-	mv '/tmp/msvc-wine/downloaded/VC/Tools/Llvm'  "$AUTOSDK_DIR/LLVM" && \
-	mv '/tmp/msvc-wine/downloaded/VC/Tools/MSVC'  "$AUTOSDK_DIR/$VISUAL_STUDIO_IDENTIFIER" && \
-	mv '/tmp/msvc-wine/downloaded/Windows Kits'   "$AUTOSDK_DIR/Windows Kits"
+# Move the files for the DIA SDK, MSVC and the Windows SDK into the AutoSDK structure
+RUN mv '/tmp/msvc-wine/downloaded/DIA SDK'       "$AUTOSDK_DIR/DIA SDK/$VISUAL_STUDIO_IDENTIFIER" && \
+	mv '/tmp/msvc-wine/downloaded/VC/Tools/MSVC' "$AUTOSDK_DIR/$VISUAL_STUDIO_IDENTIFIER" && \
+	mv '/tmp/msvc-wine/downloaded/Windows Kits'  "$AUTOSDK_DIR/Windows Kits"
+
+# Query the LLVM version and move the files for LLVM into the AutoSDK structure
+# (Note that we create a copy of the LLVM files before running clang, in case any first-run logic modifies the on-disk files)
+RUN cp -R '/tmp/msvc-wine/downloaded/VC/Tools/Llvm' /tmp/llvm && \
+	LLVM_VERSION=`wine /tmp/llvm/bin/clang-cl.exe --version | grep 'clang version' | grep -o -E '[0-9\.]+'` && \
+	mv '/tmp/msvc-wine/downloaded/VC/Tools/Llvm' "$AUTOSDK_DIR/LLVM/$LLVM_VERSION"
 
 # Extract the files for the .NET Framework SDK (if required) and move them into the AutoSDK structure
 RUN if [ ! -z "$DOTNET_FRAMEWORK_SDK" ]; then \
@@ -82,5 +91,5 @@ COPY --from=structure --chown=nonroot:nonroot /tmp/AutoSDK ${WINEPREFIX}/drive_c
 # Set the environment variable to configure Unreal Engine to use our AutoSDK files
 ENV UE_SDKS_ROOT=C:/AutoSDK
 
-# Disable Wine debug logging
+# Disable Wine debug logging by default
 ENV WINEDEBUG=-all
