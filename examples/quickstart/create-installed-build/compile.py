@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, os, shutil, subprocess, sys
+import argparse, json, shutil, subprocess, sys
 from pathlib import Path
 
 
