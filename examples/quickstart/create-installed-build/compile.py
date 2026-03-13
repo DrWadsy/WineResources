@@ -2,6 +2,7 @@
 import argparse, json, os, shutil, subprocess, sys
 from pathlib import Path
 
+
 class Utility:
 	
 	@staticmethod
@@ -9,14 +10,17 @@ class Utility:
 		"""
 		Prints a log message to stderr
 		"""
-		print('[build-engine.py] {}'.format(message), file=sys.stderr, flush=True)
+		print('[compile.py] {}'.format(message), file=sys.stderr, flush=True)
 	
 	@staticmethod
-	def error(message):
+	def error(message, leading_newline=False):
 		"""
 		Logs an error message and then exits immediately
 		"""
-		Utility.log('Error: {}'.format(message))
+		Utility.log('{}Error: {}'.format(
+			'\n' if leading_newline == True else '',
+			message
+		))
 		sys.exit(1)
 	
 	@staticmethod
@@ -27,87 +31,111 @@ class Utility:
 		stringified = [str(c) for c in command]
 		Utility.log(stringified)
 		return subprocess.run(stringified, **{'check': True, **kwargs})
+	
+	@staticmethod
+	def delete_recursive(path):
+		"""
+		Deletes the specified file or directory, performing recursive deletion for directories
+		"""
+		if path.is_dir():
+			shutil.rmtree(path)
+		else:
+			path.unlink()
 
-def custom_copy(src, dst, *, follow_symlinks = True):
-	with open(src, 'rb') as source, open(dst, 'wb') as dest:
-		shutil.copy2(source, dest)
-		dest.flush()
-		os.fsync(dest.fileno)
 
-# get path to UE source and build command as build args
+def report_missing_engine(source_path):
+	"""
+	Prints an error message reporting the absence of the required engine source files and then exits
+	"""
+	Utility.error('\n'.join([
+		'the specified path is not the root of a valid Unreal Engine source tree:',
+		str(source_path),
+		'',
+		'Note that only Unreal Engine 5.7 or newer is supported.'
+	]), leading_newline=True)
+
+
+# Parse our command-line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('engine_source', default='', help='Set the path to the UE source code to build')
-parser.add_argument('--containerise', action='store_true', help='Containerise the Installed Build')
+parser.add_argument('engine_source', help='Path to the root of the Unreal Engine source tree')
+parser.add_argument('--wrap', action='store_true', help='Build a container image to wrap the Installed Build')
 args = parser.parse_args()
 
-if (args.engine_source == ''):
-	Utility.error('Invalid arguments. You must provide the path to the UE source')
-
 # Resolve the absolute paths to our input directories
-create_installed_build_dir = Path(__file__).parent
-quickstart_dir = create_installed_build_dir.parent
+script_dir = Path(__file__).parent
+quickstart_dir = script_dir.parent
+autosdk_dir = quickstart_dir / 'autosdk'
+wrap_dir = quickstart_dir / 'wrap-installed-build'
+engine_dir = Path(args.engine_source) / 'Engine'
 
-Utility.run([
-	sys.executable,
-	quickstart_dir / 'autosdk' / 'assemble.py',
-	args.engine_source
-])
+# TODO: verify that the engine source isn't located on an unusuable filesystem (e.g. a network share)
+# ...
 
-# Remove the ADOSuppport plugin if it is present, since it is unused and breaks builds
-ADOPlugin_path = Path(args.engine_source) / 'Engine' / 'Plugins' / 'Runtime' / 'Database' / 'ADOSupport'
-if ADOPlugin_path.exists():
-	shutil.rmtree(ADOPlugin_path)
+# Attempt to detect the engine version
+engine_version = None
+version_components = {}
+try:
+	build_version = engine_dir / 'Build' / 'Build.version'
+	version_components = json.loads(build_version.read_text('utf-8'))
+	engine_version = '{}.{}.{}'.format(
+		version_components['MajorVersion'],
+		version_components['MinorVersion'],
+		version_components['PatchVersion']
+	)
+except:
+	report_missing_engine(args.engine_source)
 
-# parse build.version to determine UE version
-build_version_file = Path(args.engine_source) / 'Engine' / 'Build' / 'Build.version'
-with open(build_version_file, 'r') as file:
-	version_data = json.load(file)
-ue_version = "{}.{}.{}".format(version_data.get('MajorVersion'), version_data.get('MinorVersion'), version_data.get('PatchVersion'))
+# Verify that the engine is a supported version
+if version_components['MajorVersion'] < 5 or \
+   (version_components['MajorVersion'] == 5 and version_components['MinorVersion'] < 7):
+	report_missing_engine(args.engine_source)
 
-# Read the Wine version string so we know the base image tag
-wine_version_file = Path(__file__).parent.parent.parent.parent / 'build' / 'version.json'
-wine_version_contents = json.loads(wine_version_file.read_text('utf-8'))
-wine_version = wine_version_contents.get('wine-version')
+# Remove the ADOSupport plugin if it is present, since it breaks compilation under Wine
+# (Note that this plugin has been unused for many years and was officially removed in CL 50213900:
+#  https://github.com/EpicGames/UnrealEngine/commit/3d5026b1c9f28f99f2c18102f3e60d30b868cc80)
+ado_support_plugin = engine_dir / 'Plugins' / 'Runtime' / 'Database' / 'ADOSupport'
+if ado_support_plugin.exists():
+	Utility.log('Removing ADOSupport plugin: {}'.format(ado_support_plugin))
+	shutil.rmtree(ado_support_plugin)
 
-# bindmount UE source into that image and run UBT with the provided args
+# Build an AutoSDK container image with the appropriate SDK version for the engine
+Utility.run(
+	[sys.executable, autosdk_dir / 'assemble.py', args.engine_source],
+	check=True
+)
+
+# Bind-mount the engine source into the AutoSDK container and create an Installed Build
+mount_path = '/home/nonroot/.local/share/wineprefixes/prefix/drive_c/UnrealEngine'
 Utility.run([
 	'docker', 'run', '--rm', '-t', '--init',
-	'-v', '{}:/home/nonroot/.local/share/wineprefixes/prefix/drive_c/UE'.format(args.engine_source),
-	'epicgames/autosdk-wine:{}'.format(ue_version),
-	'wine', './UE/Engine/Build/BatchFiles/RunUAT.bat', 'BuildGraph',
-	'-target=Make Installed Build Win64', '-script=Engine/Build/InstalledEngineBuild.xml',
+	'-v', '{}:{}'.format(args.engine_source, mount_path),
+	'-w', mount_path,
+	'epicgames/autosdk-wine:{}'.format(engine_version),
+	'wine', './Engine/Build/BatchFiles/RunUAT.bat', 'BuildGraph',
+	'-script=Engine/Build/InstalledEngineBuild.xml',
+	'-target=Make Installed Build Win64',
 	'-set:HostPlatformOnly=true'
 ])
 
-# Optionally containerise the Installed Build
-if args.containerise:
-	Utility.log("Copying engine artifacts for containerisation")
-	wrap_build_dir = quickstart_dir / 'wrap-installed-build'
-	destination_dir = wrap_build_dir / 'context' / 'UnrealEngine'
-
-	files = os.listdir(destination_dir)
-	for file in files:
-		try:
-			if os.path.isdir(destination_dir / file):
-				shutil.rmtree(destination_dir / file, destination_dir / file)
-			elif file != ".gitignore":
-				os.remove(destination_dir / file)
-		except Exception as e:
-			Utility.error("Could not empty context folder before containerising: {}".format(e))
-
-	installed_build_dir = Path(args.engine_source) / 'LocalBuilds' / 'Engine' / 'Windows'
-
-	files = os.listdir(installed_build_dir)
-	for file in files:
-		try:
-			if os.path.isdir(installed_build_dir / file):
-				shutil.copytree(installed_build_dir / file, destination_dir / file)
-			else:
-				shutil.copy2(installed_build_dir / file, destination_dir / file)
-
-		except Exception as e:
-			Utility.error("Could not copy Installed Build artifacts to context folder for containerising: {}".format(e))
+# Wrap the Installed Build in a container image if requested
+if args.wrap:
 	
-	Utility.run([
-		sys.executable, wrap_build_dir / 'wrap.py',
-	])
+	# Clean out any existing contents in the target directory, except for the `.gitignore` file
+	target_dir = wrap_dir / 'context' / 'UnrealEngine'
+	Utility.log('Removing existing files in {}...'.format(target_dir))
+	for child in target_dir.iterdir():
+		if child.name != '.gitignore':
+			Utility.delete_recursive(child)
+	
+	# Copy the top-level directories from the Installed Build into the target directory
+	Utility.log('Copying Installed Build files to {}...'.format(target_dir))
+	installed_build = Path(args.engine_source) / 'LocalBuilds' / 'Engine' / 'Windows'
+	for child in installed_build.iterdir():
+		if child.is_dir():
+			shutil.copytree(child, target_dir / child.name)
+	
+	# Create the container image
+	Utility.run(
+		[sys.executable, wrap_dir / 'wrap.py'],
+		check=True
+	)
