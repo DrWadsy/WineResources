@@ -91,7 +91,7 @@ except:
 
 # Build an AutoSDK base image with the appropriate SDK version for the engine
 Utility.run(
-	[sys.executable, autosdk_dir / 'build-autosdk-image.py', unreal_dir],
+	[sys.executable, autosdk_dir / 'assemble.py', unreal_dir],
 	check=True
 )
 
