@@ -68,6 +68,9 @@ def parse_windows_sdk_json(windows_sdk_json):
 	if vs_version is None:
 		raise
 	
+	# Retrieve the Visual Studio major version number
+	vs_major = data['MinimumVisualStudio{}Version'.format(vs_version)].split('.', 1)[0]
+	
 	# Retrieve the general list of suggested components/workloads
 	suggested = data['VisualStudioSuggestedComponents']
 	
@@ -99,7 +102,8 @@ def parse_windows_sdk_json(windows_sdk_json):
 	return {
 		'components': suggested,
 		'dotnet_sdk': dotnet_sdk,
-		'vs_identifier': 'VS{}'.format(vs_version)
+		'vs_identifier': 'VS{}'.format(vs_version),
+		'vs_version': vs_major
 	}
 
 
@@ -158,6 +162,7 @@ Utility.run([
 	'--build-arg', 'COMPONENTS_AND_WORKLOADS={}'.format(' '.join(sdk_details['components'])),
 	'--build-arg', 'DOTNET_FRAMEWORK_SDK={}'.format(sdk_details['dotnet_sdk']),
 	'--build-arg', 'VISUAL_STUDIO_IDENTIFIER={}'.format(sdk_details['vs_identifier']),
+	'--build-arg', 'VISUAL_STUDIO_VERSION={}'.format(sdk_details['vs_version']),
 	'--build-arg', 'WINE_VERSION={}'.format(wine_version),
 	'-t', image_tag,
 	context_dir

@@ -10,6 +10,9 @@ ARG DOTNET_FRAMEWORK_SDK=''
 # The AutoSDK identifier for the version of Visual Studio (VS2019 / VS2022 / VS2026)
 ARG VISUAL_STUDIO_IDENTIFIER=''
 
+# The major version number for the version of Visual Studio (VS2019 == 16, VS2022 == 17, VS2026 == 18)
+ARG VISUAL_STUDIO_VERSION=''
+
 # Install our required system packages
 USER root
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -30,6 +33,7 @@ RUN python3 ./vsdownload.py \
 	--skip-patch \
 	--cache ./cache \
 	--dest ./downloaded \
+	--major "$VISUAL_STUDIO_VERSION" \
 	$COMPONENTS_AND_WORKLOADS
 
 # Create the AutoSDK directory structure
