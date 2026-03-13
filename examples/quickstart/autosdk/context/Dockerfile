@@ -4,6 +4,9 @@ FROM epicgames/wine-patched:${WINE_VERSION} AS structure
 # The list of Visual Studio components and workloads to install
 ARG COMPONENTS_AND_WORKLOADS=''
 
+# The .NET Framework SDK to install (if any)
+ARG DOTNET_FRAMEWORK_SDK=''
+
 # The AutoSDK identifier for the version of Visual Studio (VS2019 / VS2022 / VS2026)
 ARG VISUAL_STUDIO_IDENTIFIER=''
 
@@ -40,14 +43,17 @@ RUN mv '/tmp/msvc-wine/downloaded/DIA SDK'        "$AUTOSDK_DIR/DIA SDK/$VISUAL_
 	mv '/tmp/msvc-wine/downloaded/VC/Tools/MSVC'  "$AUTOSDK_DIR/$VISUAL_STUDIO_IDENTIFIER" && \
 	mv '/tmp/msvc-wine/downloaded/Windows Kits'   "$AUTOSDK_DIR/Windows Kits"
 
-# Extract the files for the .NET Framework SDK and move them into the AutoSDK structure
-RUN cd /tmp/msvc-wine/cache/Microsoft.Net.4.6.2.SDK-4.6.1590.5 && \
-	msiextract ./sdk_tools462.msi && \
-	mv './Program Files/Windows Kits/NETFXSDK' "$AUTOSDK_DIR/Windows Kits/NETFXSDK"
+# Extract the files for the .NET Framework SDK (if required) and move them into the AutoSDK structure
+RUN if [ ! -z "$DOTNET_FRAMEWORK_SDK" ]; then \
+		NETFXSDK_DIRECTORY=`find ./cache/ -iname "Microsoft.Net.$DOTNET_FRAMEWORK_SDK.SDK-4.*" -type d` && \
+		cd "$NETFXSDK_DIRECTORY" && \
+		msiextract ./sdk_tools*.msi && \
+		mv './Program Files/Windows Kits/NETFXSDK' "$AUTOSDK_DIR/Windows Kits/NETFXSDK"; \
+	fi
 
 # Locate the Windows SDK installer executable
-RUN FILE=`find ./cache/ -iname winsdksetup.exe -type f` && \
-	cp "$FILE" /tmp/winsdksetup.exe
+RUN WINSDK_INSTALLER=`find ./cache/ -iname winsdksetup.exe -type f` && \
+	cp "$WINSDK_INSTALLER" /tmp/winsdksetup.exe
 
 # Extract the Debugging Tools for Windows installer MSI from the Windows SDK installer executable
 RUN cd /tmp && \

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, platform, subprocess, sys
+import argparse, json, platform, re, subprocess, sys
 from pathlib import Path
 
 
@@ -86,12 +86,19 @@ def parse_windows_sdk_json(windows_sdk_json):
 		for component in suggested
 	]
 	
+	# Identify which .NET Framework SDK (if any) we need
+	pattern = re.compile(r'Microsoft\.Net\.Component\.(4\.[0-9]+\.[0-9]+)\.SDK')
+	matches = [pattern.fullmatch(component) for component in suggested]
+	matches = [match.group(1) for match in matches if match is not None]
+	dotnet_sdk = matches[0] if len(matches) > 0 else ''
+	
 	# Verify that we found at least one unfiltered component/workload
 	if len(suggested) == 0:
 		raise
 	
 	return {
 		'components': suggested,
+		'dotnet_sdk': dotnet_sdk,
 		'vs_identifier': 'VS{}'.format(vs_version)
 	}
 
@@ -149,6 +156,7 @@ Utility.run([
 	'--progress=plain',
 	'--platform', 'linux/amd64',
 	'--build-arg', 'COMPONENTS_AND_WORKLOADS={}'.format(' '.join(sdk_details['components'])),
+	'--build-arg', 'DOTNET_FRAMEWORK_SDK={}'.format(sdk_details['dotnet_sdk']),
 	'--build-arg', 'VISUAL_STUDIO_IDENTIFIER={}'.format(sdk_details['vs_identifier']),
 	'--build-arg', 'WINE_VERSION={}'.format(wine_version),
 	'-t', image_tag,
