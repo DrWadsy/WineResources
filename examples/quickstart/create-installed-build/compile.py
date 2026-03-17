@@ -30,8 +30,17 @@ class Utility:
 		"""
 		stringified = [str(c) for c in command]
 		Utility.log(stringified)
-		return subprocess.run(stringified, **{'check': True, **kwargs}, capture_output=True, text=True)
+		return subprocess.run(stringified, **{'check': True, **kwargs})
 	
+	@staticmethod
+	def capture(command, **kwargs):
+		"""
+		Executes the specified command and captures its output
+		"""
+		return Utility.run(
+			command, **{'capture_output': True, 'encoding': 'utf-8', **kwargs}
+		).stdout.strip()
+
 	@staticmethod
 	def delete_recursive(path):
 		"""
@@ -74,8 +83,10 @@ engine_dir = Path(args.engine_source) / 'Engine'
 if platform.system() != "Linux":
 	Utility.error("These scripts must run under Linux. Windows/MacOS are not supported")
 	
-if platform.release().__contains__("microsoft"):
-	engine_fs = Utility.run([
+if "microsoft" in platform.release():
+	if not engine_dir.is_dir():
+		report_missing_engine(args.engine_source)
+	engine_fs = Utility.capture([
 		'stat', '--file-system',
 		'--format="%T"', engine_dir])
 	if "v9fs" in engine_fs:
