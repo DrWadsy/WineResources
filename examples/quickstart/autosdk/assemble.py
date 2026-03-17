@@ -78,7 +78,7 @@ def parse_windows_sdk_json(windows_sdk_json):
 	suggested += data['VisualStudio{}SuggestedComponents'.format(vs_version)]
 	
 	# Filter out any components/workloads that we know are not required (e.g. IDE workloads)
-	ignored = ['.ATL', 'Component.Unreal', 'Microsoft.VisualStudio.Workload']
+	ignored = ['Component.Unreal', 'Microsoft.VisualStudio.Workload']
 	filter = lambda component: len([phrase for phrase in ignored if phrase in component]) == 0
 	suggested = [component for component in suggested if filter(component)]
 	
