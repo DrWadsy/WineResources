@@ -101,7 +101,7 @@ wine_version_contents = json.loads(wine_version_file.read_text('utf-8'))
 wine_version = wine_version_contents.get('wine-version')
 
 # Build the container image
-image_tag = 'epicgames/unreal-engine-{}:autosdk-wine'.format(engine_version)
+image_tag = 'epicgames/unreal-engine:dev-wine-{}'.format(engine_version)
 Utility.log('Detected files for Unreal Engine version {}'.format(engine_version))
 Utility.run([
 	'docker', 'buildx', 'build',
