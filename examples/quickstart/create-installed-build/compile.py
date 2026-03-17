@@ -78,11 +78,11 @@ autosdk_dir = quickstart_dir / 'autosdk'
 wrap_dir = quickstart_dir / 'wrap-installed-build'
 engine_dir = Path(args.engine_source) / 'Engine'
 
-# TODO: verify that the engine source isn't located on an unusuable filesystem (e.g. a network share)
-# Specifically the concern is if the script is running under WSL, with the engine source located on the windows file system
+# Verify that the script is running under Linux
 if platform.system() != "Linux":
 	Utility.error("These scripts must run under Linux. Windows/MacOS are not supported")
-	
+
+# If the script is running under WSL, verify that the engine source is not located on the windows file system
 if "microsoft" in platform.release():
 	if not engine_dir.is_dir():
 		report_missing_engine(args.engine_source)
