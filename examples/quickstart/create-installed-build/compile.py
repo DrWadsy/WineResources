@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, shutil, subprocess, sys
+import argparse, json, platform, shutil, subprocess, sys
 from pathlib import Path
 
 
@@ -30,7 +30,7 @@ class Utility:
 		"""
 		stringified = [str(c) for c in command]
 		Utility.log(stringified)
-		return subprocess.run(stringified, **{'check': True, **kwargs})
+		return subprocess.run(stringified, **{'check': True, **kwargs}, capture_output=True, text=True)
 	
 	@staticmethod
 	def delete_recursive(path):
@@ -55,6 +55,7 @@ def report_missing_engine(source_path):
 	]), leading_newline=True)
 
 
+
 # Parse our command-line arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('engine_source', help='Path to the root of the Unreal Engine source tree')
@@ -69,7 +70,16 @@ wrap_dir = quickstart_dir / 'wrap-installed-build'
 engine_dir = Path(args.engine_source) / 'Engine'
 
 # TODO: verify that the engine source isn't located on an unusuable filesystem (e.g. a network share)
-# ...
+# Specifically the concern is if the script is running under WSL, with the engine source located on the windows file system
+if platform.system() != "Linux":
+	Utility.error("These scripts must run under Linux. Windows/MacOS are not supported")
+	
+if platform.release().__contains__("microsoft"):
+	engine_fs = Utility.run([
+		'stat', '--file-system',
+		'--format="%T"', engine_dir])
+	if "v9fs" in engine_fs:
+		Utility.error("Cannot mount engine source from a Windows filesystem under WSL. Move the engine source into the Linux filesystem and retry")
 
 # Attempt to detect the engine version
 engine_version = None
