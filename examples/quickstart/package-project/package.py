@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, subprocess, sys
+import argparse, json, platform, subprocess, sys
 from pathlib import Path
 
 class Utility:
@@ -28,6 +28,22 @@ class Utility:
 		Utility.log(stringified)
 		return subprocess.run(stringified, **{'check': True, **kwargs})
 
+	@staticmethod
+	def capture(command, **kwargs):
+		"""
+		Executes the specified command and captures its output
+		"""
+		return Utility.run(
+			command, **{'capture_output': True, 'encoding': 'utf-8', **kwargs}
+		).stdout.strip()
+
+def filesystem_is_v9fs(path):
+	fs_type = Utility.capture([
+		'stat', '--file-system',
+		'--format="%T"', path])
+	if "v9fs" in fs_type:
+		return True
+	return False
 
 # Parse our command-line arguments
 parser = argparse.ArgumentParser()
@@ -55,9 +71,24 @@ package_command = [
 	'-nop4', '-allmaps', '-build', '-cook', '-stage', '-package', '-pak', '-iostore', '-compressed'
 ]
 
+# # Verify that the script is running under Linux
+if platform.system() != "Linux":
+	Utility.error("These scripts must run under Linux. Windows/MacOS are not supported")
+
+# If the script is running under WSL, verify that the engine source is not located on the windows file system
+if "microsoft" in platform.release():
+	if args.engine is not None:
+		if not args.engine.is_dir():
+			Utility.error("{} does not exist".format(args.engine))
+		if filesystem_is_v9fs(args.engine):
+			Utility.error("Cannot mount Installed Build from a Windows filesystem under WSL. Move the Installed Build into the Linux filesystem and retry")
+	if not args.engine.is_dir():
+			Utility.error("{} does not exist".format(args.engine))
+	if filesystem_is_v9fs(args.project):
+			Utility.error("Cannot mount project source from a Windows filesystem under WSL. Move the project source into the Linux filesystem and retry")
+
 # Determine whether we are bind-mounting an Installed Build from the host or using a container image that already wraps a build
 if args.engine is not None:
-	
 	# Ensure we have an AutoSDK container image with the appropriate SDK version for the engine
 	Utility.run(
 		[sys.executable, autosdk_dir / 'assemble.py', args.engine],
