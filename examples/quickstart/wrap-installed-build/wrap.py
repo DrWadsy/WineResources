@@ -37,7 +37,7 @@ class Utility:
 		"""
 		stringified = [str(c) for c in command]
 		Utility.log(stringified)
-		return subprocess.run(stringified, **{'check': False, **kwargs}).returncode
+		return subprocess.run(stringified, **{'check': True, **kwargs}).returncode
 
 
 def report_missing_engine(editor_exe):
