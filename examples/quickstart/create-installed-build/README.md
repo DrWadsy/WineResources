@@ -1,41 +1,54 @@
 # Create Installed Build example
 
-This directory contains a script for building the Unreal Engine inside a [Wine and AutoSDK enabled container](../autosdk/) under Linux.
+This directory contains a script for building Unreal Engine from source for Windows inside an [AutoSDK container image](../autosdk/). It supports Unreal Engine 5.7.0 and newer.
+
+> [!IMPORTANT]
+> Unlike most scripts in this repository, this script only supports being run under native Linux. It cannot be run under Windows or macOS with Docker Desktop, due to interactions between Wine's executable loader and the systems used to mount host filesystem directories into Linux containers under these platforms.
 
 
 ## Contents
 
 - [Prerequisites](#prerequisites)
-- [Building the Wine and AutoSDK enabled base images](#building-the-wine-and-autosdk-enabled-base-images)
-- [Building the Unreal Engine](#building-the-unreal-engine)
-  - [Wrapping the Installed Build](#wrapping-the-installed-build)
+- [Building the Wine and AutoSDK base images](#building-the-wine-and-autosdk-base-images)
+- [Building Unreal Engine from source](#building-unreal-engine-from-source)
+    - [Wrapping the Installed Build in a container image](#wrapping-the-installed-build-in-a-container-image)
 
 
 ## Prerequisites
 
-- Unreal Engine Source Code [downloaded from here](https://github.com/EpicGames/UnrealEngine/)
+- Unreal Engine source code (from either [GitHub](https://www.unrealengine.com/en-US/ue-on-github) or [Perforce](https://dev.epicgames.com/documentation/en-us/unreal-engine/accessing-unreal-engine-with-perforce)), version 5.7.0 or newer
 - [Docker Engine](https://docs.docker.com/engine/install/) version 23.0.0 or newer
 - [Python](https://www.python.org/) 3.7 or newer
 
 
-## Building the Wine and AutoSDK enabled base images
+## Building the Wine and AutoSDK base images
 
-The scripts in this folder will automatically check that the Wine and AutoSDK enabled base images exist, and will build them for you if not. If you wish to build them manually then simply follow the instructions in the [README for the repository's top-level build directory](../../../build/README.md) to build a base image containing Epic's patched version of Wine, and the instructions in the [README for the AutoSDK example](../autosdk/README.md) to build an image also containing the AutoSDK components required by your version of the Unreal Engine. Once these builds complete, the Wine base image will be available with the tag `epicgames/wine-patched:10.20` and the AutoSDK enabled image will be available with the tag `epicgames/autosdk-wine:<VERSION>`, where `<VERSION>` is the version of Unreal Engine provided.
+The script in this directory will automatically build the Wine and AutoSDK base images if they do not exist. If you wish to build them manually then simply follow the instructions in the relevant README files:
+
+- The README in the [repository's top-level **build** directory](../../../build/README.md) provides instructions for building a base image containing Epic's patched version of Wine.
+- The README in the [**autosdk** directory](../autosdk/README.md) provides instructions for building an image that contains the AutoSDK components required by your version of Unreal Engine.
 
 
-## Building the Unreal Engine
+## Building Unreal Engine from source
 
-> [!NOTE]
-> This script will only run under Linux, due to interactions between Wine and bind-mounted volumes on Windows and MacOS platforms.
+Run the wrapper script, passing in the path to the root of the Unreal Engine source tree (the directory which contains the `Engine` subdirectory):
 
-Run the wrapper script, passing in the path to the root of the Unreal Engine source (the folder conatining the `Engine` folder):
+```bash
+./compile.sh </path/to/UE/source>
+```
 
-- `./compile.sh </path/to/UE/source>`
+The wrapper script will run the Python build script itself. The Python build script will start a container using the appropriate AutoSDK base image and bind-mount the Unreal Engine source tree from the host filesystem into the container. The script will then build the engine from source, producing an [Installed Build](https://dev.epicgames.com/documentation/en-us/unreal-engine/installed-build-reference-guide-for-unreal-engine) which can be used under Windows or Wine.
 
-The wrapper script will run the Python build script itself. The Python build script will run the appropriate AutoSDK enabled container, with the Unreal Engine source bind-mounted in. The script will then build the Engine, producing an installed Build which can be used under Windows, or in either the [wrap installed build](../wrap-installed-build/) or [package project](../package-project/) scripts.
+Once the build completes, the Installed Build will be available on the host filesystem at `</path/to/UE/source>/LocalBuilds/Engine/Windows`.
 
-Once the build completes, the Installed Build will be available at `</path/to/UE/source>/LocalBuilds/Engine/Windows`
+### Wrapping the Installed Build in a container image
 
-### Wrapping the Installed Build
-If you want to wrap the Installed Build in a container you can either run the [wrap installed build](../wrap-installed-build/) manually, or you can provide the optional `--wrap` flag at the command line:
-- `./compile.sh </path/to/UE/source> --wrap`
+By default, the Installed Build produced by the script only exists on the host filesystem. If you want to create a container image that includes the Installed Build files then you can specify the optional `--wrap` flag when running the script:
+
+```bash
+./compile.sh </path/to/UE/source> --wrap
+```
+
+This will automatically copy the the Installed Build files from the host filesystem into a container image. When this process completes, the container image will be available with the tag `epicgames/unreal-engine:dev-wine-<VERSION>`, where `<VERSION>` is the version of Unreal Engine that the container image was built for.
+
+Alternatively, you can create a container image from existing Installed Build files at any time by manually running the script in the [**wrap-installed-build**](../wrap-installed-build/) directory.

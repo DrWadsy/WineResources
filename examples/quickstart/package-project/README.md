@@ -1,44 +1,58 @@
 # Package Project example
 
-This directory contains a script for packaging an Unreal Engine project using an Installed Build inside a [Wine and AutoSDK enabled container](../autosdk/) under Linux. The installed Build can either be stored on your machine, or [wrapped in a container](../wrap-installed-build/).
+This directory contains a script for packaging an Unreal Engine project for Windows using an [Installed Build](https://dev.epicgames.com/documentation/en-us/unreal-engine/installed-build-reference-guide-for-unreal-engine) inside an [AutoSDK container image](../autosdk/) under Linux. The script supports the use of Installed Build files stored on the host filesystem, or [wrapped in a container image](../wrap-installed-build/). It supports Unreal Engine 5.6.0 and newer.
+
+> [!IMPORTANT]
+> Unlike most scripts in this repository, this script only supports being run under native Linux. It cannot be run under Windows or macOS with Docker Desktop, due to interactions between Wine's executable loader and the systems used to mount host filesystem directories into Linux containers under these platforms.
 
 
 ## Contents
 
 - [Prerequisites](#prerequisites)
-- [Building the Wine and AutoSDK enabled base images](#building-the-wine-and-autosdk-enabled-base-images)
+- [Building the Wine and AutoSDK base images](#building-the-wine-and-autosdk-base-images)
 - [Packaging the project](#packaging-the-project)
+    - [Using Installed Build files from the host filesystem](#using-installed-build-files-from-the-host-filesystem)
+    - [Using Installed Build files from a container image](#using-installed-build-files-from-a-container-image)
 
 
 ## Prerequisites
 
-- Installed Build of the Unreal Engine, either
-  - stored on your machine
-  - [wrapped in a container](../wrap-installed-build/)
-- Compatible UE project
+- Installed Build of Unreal Engine version 5.6.0 or newer, either stored on the host filesystem or [wrapped in a container image](../wrap-installed-build/)
+- Unreal Engine project compatible with the version of the engine
 - [Docker Engine](https://docs.docker.com/engine/install/) version 23.0.0 or newer
 - [Python](https://www.python.org/) 3.7 or newer
 
 
-## Building the Wine and AutoSDK enabled base images
+## Building the Wine and AutoSDK base images
 
-The scripts in this folder will automatically check that the Wine and AutoSDK enabled base images exist, and will build them for you if not. If you wish to build them manually then simply follow the instructions in the [README for the repository's top-level build directory](../../../build/README.md) to build a base image containing Epic's patched version of Wine, and the instructions in the [README for the AutoSDK example](../autosdk/README.md) to build an image also containing the AutoSDK components required by your version of the Unreal Engine. Once these builds complete, the Wine base image will be available with the tag `epicgames/wine-patched:10.20` and the AutoSDK enabled image will be available with the tag `epicgames/autosdk-wine:<VERSION>`, where `<VERSION>` is the version of Unreal Engine provided.
+The script in this directory will automatically build the Wine and AutoSDK base images if they do not exist. If you wish to build them manually then simply follow the instructions in the relevant README files:
+
+- The README in the [repository's top-level **build** directory](../../../build/README.md) provides instructions for building a base image containing Epic's patched version of Wine.
+- The README in the [**autosdk** directory](../autosdk/README.md) provides instructions for building an image that contains the AutoSDK components required by your version of Unreal Engine.
 
 
 ## Packaging the project
 
-> [!NOTE]
-> This script will only run under Linux, due to interactions between Wine and bind-mounted volumes on Windows and MacOS platforms.
+### Using Installed Build files from the host filesystem
 
-Run the wrapper script, passing in:
-- the `project` flag, with the path to the uproject file you wish to build with
-- EITHER:
-  - the `--engine` flag, with the path to the root of the Unreal Engine source (the folder conatining the `Engine` folder)
-  - the `--image` flag, with the image tag for your containerised Unreal Image source
+To perform packaging using Installed Build files located on the host filesystem, run the wrapper script with the path of both the `.uproject` file you wish to package and the path to the Installed Build files:
 
-- `./package.sh --engine </path/to/UE/source> --project </path/to/.uproject/file>`
-- `./package.sh -- engine </path/to/UE/source> --image <inatslled-build:image-tag>`
+```bash
+./package.sh --project </path/to/.uproject> --engine </path/to/UE/source>
+```
 
-The wrapper script will run the Python build script itself. If the Installed Build files are provided then the Python build script will run the appropriate AutoSDK enabled container, with both the Unreal Engine source and the project folder bind-mounted in. If an image containing an Installed Build is provided then the Python build script will run that image in a container with the project folder bind-mounted in. Either way the script will package the project in place, using the provided Installed Build.
+The wrapper script will run the Python build script itself. The Python build script will start a container using the appropriate AutoSDK base image and bind-mount both the project source tree and the Installed Build files from the host filesystem into the container. The script will then package the project for Windows.
 
-Once the build completes, the packaged project will be available at `</project/path>/dist/Windows`.
+Once packaging completes, the packaged files will be available on the host filesystem at `</path/to/.uproject>/dist`.
+
+### Using Installed Build files from a container image
+
+To perform packaging using Installed Build files that have been [wrapped in a container image](../wrap-installed-build/), run the wrapper script with the path of the `.uproject` file you wish to package and the container image tag:
+
+```bash
+./package.sh --project </path/to/.uproject> --image epicgames/unreal-engine:dev-wine-<VERSION>
+```
+
+The wrapper script will run the Python build script itself. The Python build script will start a container using the specified Installed Build container image and bind-mount the project source tree from the host filesystem into the container. The script will then package the project for Windows.
+
+Once packaging completes, the packaged files will be available on the host filesystem at `</path/to/.uproject>/dist`.
