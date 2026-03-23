@@ -64,7 +64,6 @@ def report_missing_engine(source_path):
 	]), leading_newline=True)
 
 
-
 # Parse our command-line arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('engine_source', help='Path to the root of the Unreal Engine source tree')
@@ -79,18 +78,21 @@ wrap_dir = quickstart_dir / 'wrap-installed-build'
 engine_dir = Path(args.engine_source) / 'Engine'
 
 # Verify that the script is running under Linux
-if platform.system() != "Linux":
-	Utility.error("These scripts must run under Linux. Windows/MacOS are not supported")
+if platform.system() != 'Linux':
+	Utility.error('This script must be run under Linux. Windows and macOS are not supported.')
 
-# If the script is running under WSL, verify that the engine source is not located on the windows file system
-if "microsoft" in platform.release():
+# If the script is running under WSL2, verify that the engine source is not located on the host Windows filesystem
+if 'microsoft' in platform.release():
+	
 	if not engine_dir.is_dir():
 		report_missing_engine(args.engine_source)
-	engine_fs = Utility.capture([
-		'stat', '--file-system',
-		'--format="%T"', engine_dir])
-	if "v9fs" in engine_fs:
-		Utility.error("Cannot mount engine source from a Windows filesystem under WSL. Move the engine source into the Linux filesystem and retry")
+	
+	engine_fs = Utility.capture(['stat', '--file-system', '--format="%T"', engine_dir])
+	if 'v9fs' in engine_fs:
+		Utility.error(' '.join([
+			'Cannot mount engine source from a Windows filesystem under WSL2.',
+			'Move the engine source into the Linux filesystem and retry.'
+		]))
 
 # Attempt to detect the engine version
 engine_version = None

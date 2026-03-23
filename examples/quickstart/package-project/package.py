@@ -37,13 +37,19 @@ class Utility:
 			command, **{'capture_output': True, 'encoding': 'utf-8', **kwargs}
 		).stdout.strip()
 
-def filesystem_is_v9fs(path):
-	fs_type = Utility.capture([
-		'stat', '--file-system',
-		'--format="%T"', path])
-	if "v9fs" in fs_type:
-		return True
-	return False
+
+def check_v9fs_filesystem(path, description):
+	
+	if not path.is_dir():
+		Utility.error('The {} directory "{}" does not exist.'.format(description, path))
+	
+	fs_type = Utility.capture(['stat', '--file-system', '--format="%T"', path])
+	if 'v9fs' in fs_type:
+		Utility.error(' '.join([
+			'Cannot mount {} from a Windows filesystem under WSL2.'.format(description),
+			'Move the {} into the Linux filesystem and retry.'.format(description)
+		]))
+
 
 # Parse our command-line arguments
 parser = argparse.ArgumentParser()
@@ -71,24 +77,19 @@ package_command = [
 	'-nop4', '-allmaps', '-build', '-cook', '-stage', '-package', '-pak', '-iostore', '-compressed'
 ]
 
-# # Verify that the script is running under Linux
-if platform.system() != "Linux":
-	Utility.error("These scripts must run under Linux. Windows/MacOS are not supported")
+# Verify that the script is running under Linux
+if platform.system() != 'Linux':
+	Utility.error('This script must be run under Linux. Windows and macOS are not supported.')
 
-# If the script is running under WSL, verify that the engine source is not located on the windows file system
-if "microsoft" in platform.release():
+# If the script is running under WSL2, verify that the paths to be bind-mounted are not located on the host Windows filesystem
+if 'microsoft' in platform.release():
+	check_v9fs_filesystem(args.project, 'project source')
 	if args.engine is not None:
-		if not args.engine.is_dir():
-			Utility.error("{} does not exist".format(args.engine))
-		if filesystem_is_v9fs(args.engine):
-			Utility.error("Cannot mount Installed Build from a Windows filesystem under WSL. Move the Installed Build into the Linux filesystem and retry")
-	if not args.engine.is_dir():
-			Utility.error("{} does not exist".format(args.engine))
-	if filesystem_is_v9fs(args.project):
-			Utility.error("Cannot mount project source from a Windows filesystem under WSL. Move the project source into the Linux filesystem and retry")
+		check_v9fs_filesystem(args.engine, 'Installed Build')
 
 # Determine whether we are bind-mounting an Installed Build from the host or using a container image that already wraps a build
 if args.engine is not None:
+	
 	# Ensure we have an AutoSDK container image with the appropriate SDK version for the engine
 	Utility.run(
 		[sys.executable, autosdk_dir / 'assemble.py', args.engine],
