@@ -83,9 +83,9 @@ if platform.system() != 'Linux':
 
 # If the script is running under WSL2, verify that the paths to be bind-mounted are not located on the host Windows filesystem
 if 'microsoft' in platform.release():
-	check_v9fs_filesystem(args.project, 'project source')
+	check_v9fs_filesystem(project_dir, 'project source')
 	if args.engine is not None:
-		check_v9fs_filesystem(args.engine, 'Installed Build')
+		check_v9fs_filesystem(Path(args.engine), 'Installed Build')
 
 # Determine whether we are bind-mounting an Installed Build from the host or using a container image that already wraps a build
 if args.engine is not None:
